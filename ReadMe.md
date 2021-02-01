@@ -23,6 +23,7 @@ Avant d'apprendre l'application de chat, vous devez d'abord créer des tables po
 Avant d'apprendre l'application de chat, vous devez d'abord créer des tables pour stocker les données de l'application de chat dans la base de données Mysql. Vous devez donc d'abord créer des tables en exécutant le script Sql suivant, vous pouvez créer des tables d'application de chat dans votre base de données mysql.
 
 ```
+--
 -- Database: `chat`
 --
 
@@ -44,7 +45,7 @@ CREATE TABLE `chat_user_table` (
   `user_login_status` enum('Logout','Login') NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
+--
 -- Indexes for dumped tables
 --
 
@@ -56,7 +57,9 @@ ALTER TABLE `chat_user_table`
 
 --
 -- AUTO_INCREMENT for dumped tables
+--
 
+--
 -- AUTO_INCREMENT for table `chat_user_table`
 --
 ALTER TABLE `chat_user_table`
@@ -279,8 +282,147 @@ class ChatUser
 		}
 	}
 
-}
+	function is_valid_email_verification_code()
+	{
+		$query = "
+		SELECT * FROM chat_user_table 
+		WHERE user_verification_code = :user_verification_code
+		";
 
+		$statement = $this->connect->prepare($query);
+
+		$statement->bindParam(':user_verification_code', $this->user_verification_code);
+
+		$statement->execute();
+
+		if($statement->rowCount() > 0)
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	function enable_user_account()
+	{
+		$query = "
+		UPDATE chat_user_table 
+		SET user_status = :user_status 
+		WHERE user_verification_code = :user_verification_code
+		";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->bindParam(':user_status', $this->user_status);
+
+		$statement->bindParam(':user_verification_code', $this->user_verification_code);
+
+		if($statement->execute())
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	function update_user_login_data()
+	{
+		$query = "
+		UPDATE chat_user_table 
+		SET user_login_status = :user_login_status 
+		WHERE user_id = :user_id
+		";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->bindParam(':user_login_status', $this->user_login_status);
+
+		$statement->bindParam(':user_id', $this->user_id);
+
+		if($statement->execute())
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	function get_user_data_by_id()
+	{
+		$query = "
+		SELECT * FROM chat_user_table 
+		WHERE user_id = :user_id";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->bindParam(':user_id', $this->user_id);
+
+		try
+		{
+			if($statement->execute())
+			{
+				$user_data = $statement->fetch(PDO::FETCH_ASSOC);
+			}
+			else
+			{
+				$user_data = array();
+			}
+		}
+		catch (Exception $error)
+		{
+			echo $error->getMessage();
+		}
+		return $user_data;
+	}
+
+	function upload_image($user_profile)
+	{
+		$extension = explode('.', $user_profile['name']);
+		$new_name = rand() . '.' . $extension[1];
+		$destination = 'images/' . $new_name;
+		move_uploaded_file($user_profile['tmp_name'], $destination);
+		return $destination;
+	}
+
+	function update_data()
+	{
+		$query = "
+		UPDATE chat_user_table 
+		SET user_name = :user_name, 
+		user_email = :user_email, 
+		user_password = :user_password, 
+		user_profile = :user_profile  
+		WHERE user_id = :user_id
+		";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->bindParam(':user_name', $this->user_name);
+
+		$statement->bindParam(':user_email', $this->user_email);
+
+		$statement->bindParam(':user_password', $this->user_password);
+
+		$statement->bindParam(':user_profile', $this->user_profile);
+
+		$statement->bindParam(':user_id', $this->user_id);
+
+		if($statement->execute())
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+}
 ?>
 ```
 
@@ -338,7 +480,41 @@ if(isset($_POST["register"]))
     {
         if($user_object->save_data())
         {
-            $success_message = 'Registration completed';
+
+            $mail = new PHPMailer(true);
+
+            $mail->isSMTP();
+
+            $mail->Host = 'smtpout.secureserver.net';
+
+            $mail->SMTPAuth = true;
+
+            $mail->Username   = 'xxxxx';                     // SMTP username
+            $mail->Password   = 'xxxxxx';
+
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+
+            $mail->Port = 80;
+
+            $mail->setFrom('tutorial@webslesson.info', 'Webslesson');
+
+            $mail->addAddress($user_object->getUserEmail());
+
+            $mail->isHTML(true);
+
+            $mail->Subject = 'Registration Verification for Chat Application Demo';
+
+            $mail->Body = '
+            <p>Thank you for registering for Chat Application Demo.</p>
+                <p>This is a verification email, please click the link to verify your email address.</p>
+                <p><a href="http://localhost/tutorial/chat_application/verify.php?code='.$user_object->getUserVerificationCode().'">Click to Verify</a></p>
+                <p>Thank you...</p>
+            ';
+
+            $mail->send();
+
+
+            $success_message = 'Verification Email sent to ' . $user_object->getUserEmail() . ', so before login first verify your email';
         }
         else
         {
@@ -469,6 +645,60 @@ Sous ce fichier, nous créerons une page de connexion pour cette application de 
 
 session_start();
 
+$error = '';
+
+if(isset($_SESSION['user_data']))
+{
+    header('location:chatroom.php');
+}
+
+if(isset($_POST['login']))
+{
+    require_once('database/ChatUser.php');
+
+    $user_object = new ChatUser;
+
+    $user_object->setUserEmail($_POST['user_email']);
+
+    $user_data = $user_object->get_user_data_by_email();
+
+    if(is_array($user_data) && count($user_data) > 0)
+    {
+        if($user_data['user_status'] == 'Enable')
+        {
+            if($user_data['user_password'] == $_POST['user_password'])
+            {
+                $user_object->setUserId($user_data['user_id']);
+                $user_object->setUserLoginStatus('Login');
+
+                if($user_object->update_user_login_data())
+                {
+                    $_SESSION['user_data'][$user_data['user_id']] = [
+                        'id'    =>  $user_data['user_id'],
+                        'name'  =>  $user_data['user_name'],
+                        'profile'   =>  $user_data['user_profile']
+                    ];
+
+                    header('location:chatroom.php');
+
+                }
+            }
+            else
+            {
+                $error = 'Wrong Password';
+            }
+        }
+        else
+        {
+            $error = 'Please Verify Your Email Address';
+        }
+    }
+    else
+    {
+        $error = 'Wrong Email Address';
+    }
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -505,7 +735,7 @@ session_start();
     <div class="containter">
         <br />
         <br />
-        <h1 class="text-center">PHP Chat Application using Websocket</h1>
+        <h1 class="text-center">Chat Application in PHP & MySql using WebSocket - Login</h1>
         <div class="row justify-content-md-center mt-5">
             
             <div class="col-md-4">
@@ -519,7 +749,34 @@ session_start();
                     ';
                     unset($_SESSION['success_message']);
                }
+
+               if($error != '')
+               {
+                    echo '
+                    <div class="alert alert-danger">
+                    '.$error.'
+                    </div>
+                    ';
+               }
                ?>
+                <div class="card">
+                    <div class="card-header">Login</div>
+                    <div class="card-body">
+                        <form method="post" id="login_form">
+                            <div class="form-group">
+                                <label>Enter Your Email Address</label>
+                                <input type="text" name="user_email" id="user_email"  class="form-control" data-parsley-type="email" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Enter Your Password</label>
+                                <input type="password" name="user_password" id="user_password" class="form-control" required />
+                            </div>
+                            <div class="form-group text-center">
+                                <input type="submit" name="login" id="login" class="btn btn-primary" value="Login" />
+                            </div>
+                        </form>
+                    </div>  
+                </div>
             </div>
         </div>
     </div>
@@ -529,13 +786,9 @@ session_start();
 </html>
 
 <script>
-
-$(document).ready(function(){
-    
-    
-    
-});
-
+    $(document).ready(function(){
+        $('#login_form').parsley()
+    })
 </script>
 ```
 
@@ -695,12 +948,27 @@ session_start();
 <body>
 	<div class="container">
 		<br />
-        <h3 class="text-center">PHP Chat Application using Websocket - Install Ratchet Library</h3>
+        <h3 class="text-center">PHP Chat Application using Websocket - Send Recieve Message</h3>
         <br />
 		<div class="row">
 			
 			<div class="col-lg-8">
-				
+				<div class="card">
+					<div class="card-header"><h3>Chat Room</h3></div>
+					<div class="card-body" id="messages_area">
+
+					</div>
+				</div>
+
+				<form method="post" id="chat_form" data-parsley-errors-container="#validation_error">
+					<div class="input-group mb-3">
+						<textarea class="form-control" id="chat_message" name="chat_message" placeholder="Type Message Here" data-parsley-maxlength="1000" data-parsley-pattern="/^[a-zA-Z0-9\s]+$/" required></textarea>
+						<div class="input-group-append">
+							<button type="submit" name="send" id="send" class="btn btn-primary"><i class="fa fa-paper-plane"></i></button>
+						</div>
+					</div>
+					<div id="validation_error"></div>
+				</form>
 			</div>
 			<div class="col-lg-4">
 				<?php
@@ -736,10 +1004,45 @@ session_start();
 
 		conn.onmessage = function(e) {
 		    console.log(e.data);
-		};
-		
-		$('#logout').click(function(){
 
+		    var data = JSON.parse(e.data);
+
+		    var row_class = 'row justify-content-start';
+
+		    var background_class = 'text-dark alert-light';
+
+		    var html_data = "<div class='"+row_class+"'><div class='col-sm-10'><div class='shadow-sm alert "+background_class+"'>"+data.msg+"</div></div></div>";
+
+		    $('#messages_area').append(html_data);
+
+		    $("#chat_message").val("");
+		};
+
+		$('#chat_form').parsley();
+
+		$('#chat_form').on('submit', function(event){
+
+			event.preventDefault();
+
+			if($('#chat_form').parsley().isValid())
+			{
+
+				var user_id = $('#login_user_id').val();
+
+				var message = $('#chat_message').val();
+
+				var data = {
+					userId : user_id,
+					msg : message
+				};
+
+				conn.send(JSON.stringify(data));
+
+			}
+
+		});
+		
+		$('#logout').click(function() {
 			user_id = $('#login_user_id').val();
 
 			$.ajax({
@@ -757,11 +1060,8 @@ session_start();
 					}
 				}
 			})
-
 		});
-
 	});
-	
 </script>
 </html>
 ```
@@ -772,13 +1072,10 @@ Ce fichier a reçu une demande ajax pour la déconnexion de l'utilisateur de l'a
 
 ```
 <?php
-
 //action.php
-
 session_start();
 
-if(isset($_POST['action']) && $_POST['action'] == 'leave')
-{
+if(isset($_POST['action']) && $_POST['action'] == 'leave') {
 	require('database/ChatUser.php');
 
 	$user_object = new ChatUser;
@@ -787,8 +1084,7 @@ if(isset($_POST['action']) && $_POST['action'] == 'leave')
 
 	$user_object->setUserLoginStatus('Logout');
 
-	if($user_object->update_user_login_data())
-	{
+	if($user_object->update_user_login_data()) {
 		unset($_SESSION['user_data']);
 
 		session_destroy();
@@ -796,8 +1092,6 @@ if(isset($_POST['action']) && $_POST['action'] == 'leave')
 		echo json_encode(['status'=>1]);
 	}
 }
-
-
 ?>
 ```
 
