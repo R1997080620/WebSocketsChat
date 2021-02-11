@@ -10,7 +10,7 @@ Ceci est un article très intéressant sur Comment créer une application de cha
 
 WebSockets est un système bidirectionnel et duplex intégral qui fournit une connexion permanente d'un navigateur Web à notre serveur. Ainsi, lorsque la connexion WebSocket a été établie dans notre navigateur, la connexion sera ouverte jusqu'à ce que le client ou le serveur décide de fermer cette connexion. Ainsi, avec cette connexion ouverte, l'utilisateur ou notre serveur peut envoyer ou recevoir des données de chat à tout moment l'un à l'autre et cela rendra notre programmation Web complètement basée sur les événements et pas seulement sur le démarrage de l'utilisateur. Les autres avantages de ces Websockets sont que, en même temps sur un seul serveur en cours d'exécution, il connectera toutes les connexions et nous permettra de communiquer avec n'importe quel nombre de connexions en direct à tout moment. Ce sont donc tous les avantages de ces WebSockets dans cette programmation Web.
 
-Sur la base de ces avantages, nous avons utilisé des WebSockets PHP comme Ratchet pour créer une application de chat en PHP et Mysql. Dans cet article, nous allons vous apprendre étape par étape comment créer une application de chat en PHP en utilisant WebSocket à partir de zéro. Dans ce tutoriel de développement Web PHP, vous pouvez apprendre comment créer rapidement une application de chat avec RatChet à l'aide d'un script PHP et d'une base de données Mysql.
+Sur la base de ces avantages, nous avons utilisé des WebSockets PHP comme Ratchet pour créer une application de chat en PHP et Mysql. Dans cet article, nous allons vous apprendre étape par étape comment créer une application de chat en PHP en utilisant WebSocket à partir de zéro. Dans ce didacticiel de développement Web PHP, vous pouvez apprendre comment créer rapidement une application de chat avec RatChet à l'aide d'un script PHP et d'une base de données Mysql.
 
 ### Base de données de l'application de chat
 
@@ -22,10 +22,22 @@ Avant d'apprendre l'application de chat, vous devez d'abord créer des tables po
 
 Avant d'apprendre l'application de chat, vous devez d'abord créer des tables pour stocker les données de l'application de chat dans la base de données Mysql. Vous devez donc d'abord créer des tables en exécutant le script Sql suivant, vous pouvez créer des tables d'application de chat dans votre base de données mysql.
 
-```
---
+```--
 -- Database: `chat`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `chatrooms`
+--
+
+CREATE TABLE `chatrooms` (
+  `id` int(11) NOT NULL,
+  `userid` int(11) NOT NULL,
+  `msg` varchar(200) NOT NULL,
+  `created_on` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -50,6 +62,12 @@ CREATE TABLE `chat_user_table` (
 --
 
 --
+-- Indexes for table `chatrooms`
+--
+ALTER TABLE `chatrooms`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `chat_user_table`
 --
 ALTER TABLE `chat_user_table`
@@ -60,10 +78,16 @@ ALTER TABLE `chat_user_table`
 --
 
 --
+-- AUTO_INCREMENT for table `chatrooms`
+--
+ALTER TABLE `chatrooms`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
 -- AUTO_INCREMENT for table `chat_user_table`
 --
 ALTER TABLE `chat_user_table`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 ```
 
@@ -422,9 +446,129 @@ class ChatUser
 			return false;
 		}
 	}
+
+	function get_user_all_data()
+	{
+		$query = "
+		SELECT * FROM chat_user_table 
+		";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->execute();
+
+		$data = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+		return $data;
+	}
+
 }
+
 ?>
 ```
+
+**_database/ChatRooms.php**
+
+Cette classe que nous utiliserons pour le fonctionnement de la base de données des données des messages de discussion. Dans cette classe, nous allons créer et obtenir une fonction pour l'opération liée à la base de données de données de discussion de processus. En utilisant cette classe, nous insérerons ou stockerons un message de discussion dans la base de données Mysql et récupérerons les données de discussion de la base de données Mysql pour les afficher sur la page Web.
+
+~~~
+<?php 
+	
+class ChatRooms
+{
+	private $chat_id;
+	private $user_id;
+	private $message;
+	private $created_on;
+	protected $connect;
+
+	public function setChatId($chat_id)
+	{
+		$this->chat_id = $chat_id;
+	}
+
+	function getChatId()
+	{
+		return $this->chat_id;
+	}
+
+	function setUserId($user_id)
+	{
+		$this->user_id = $user_id;
+	}
+
+	function getUserId()
+	{
+		return $this->user_id;
+	}
+
+	function setMessage($message)
+	{
+		$this->message = $message;
+	}
+
+	function getMessage()
+	{
+		return $this->message;
+	}
+
+	function setCreatedOn($created_on)
+	{
+		$this->created_on = $created_on;
+	}
+
+	function getCreatedOn()
+	{
+		return $this->created_on;
+	}
+
+	public function __construct()
+	{
+		require_once("Database_connection.php");
+
+		$database_object = new Database_connection;
+
+		$this->connect = $database_object->connect();
+	}
+
+	function save_chat()
+	{
+		$query = "
+		INSERT INTO chatrooms 
+			(userid, msg, created_on) 
+			VALUES (:userid, :msg, :created_on)
+		";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->bindParam(':userid', $this->user_id);
+
+		$statement->bindParam(':msg', $this->message);
+
+		$statement->bindParam(':created_on', $this->created_on);
+
+		$statement->execute();
+	}
+
+	function get_all_chat_data()
+	{
+		$query = "
+		SELECT * FROM chatrooms 
+			INNER JOIN chat_user_table 
+			ON chat_user_table.user_id = chatrooms.userid 
+			ORDER BY chatrooms.id ASC
+		";
+
+		$statement = $this->connect->prepare($query);
+
+		$statement->execute();
+
+		return $statement->fetchAll(PDO::FETCH_ASSOC);
+	}
+}
+	
+?>
+~~~
 
 **_register.php_**
 
@@ -786,15 +930,19 @@ if(isset($_POST['login']))
 </html>
 
 <script>
-    $(document).ready(function(){
-        $('#login_form').parsley()
-    })
+
+$(document).ready(function(){
+    
+    $('#login_form').parsley();
+    
+});
+
 </script>
 ```
 
 **_verify.php_**
 
-Ce code source de fichier vérifiera l'adresse e-mail de l'utilisateur et activera le compte utilisateur pour la connection au système de chat.
+Ce code source de fichier vérifiera l'adresse e-mail de l'utilisateur et activera le compte utilisateur pour la connexion au système de chat.
 
 ```
 <?php
@@ -884,6 +1032,24 @@ Ce **chatroom.php** ne sera accessible que par l'utilisateur de connexion, donc 
 ```
 <?php 
 session_start();
+
+if(!isset($_SESSION['user_data']))
+{
+	header('location:index.php');
+}
+
+require('database/ChatUser.php');
+
+require('database/ChatRooms.php');
+
+$chat_object = new ChatRooms;
+
+$chat_data = $chat_object->get_all_chat_data();
+
+$user_object = new ChatUser;
+
+$user_data = $user_object->get_user_all_data();
+
 ?>
 
 <!DOCTYPE html>
@@ -948,7 +1114,7 @@ session_start();
 <body>
 	<div class="container">
 		<br />
-        <h3 class="text-center">PHP Chat Application using Websocket - Send Recieve Message</h3>
+        <h3 class="text-center">PHP Chat Application using Websocket - Display User with Online or Offline Status</h3>
         <br />
 		<div class="row">
 			
@@ -956,7 +1122,37 @@ session_start();
 				<div class="card">
 					<div class="card-header"><h3>Chat Room</h3></div>
 					<div class="card-body" id="messages_area">
+					<?php
+					foreach($chat_data as $chat)
+					{
+						if(isset($_SESSION['user_data'][$chat['userid']]))
+						{
+							$from = 'Me';
+							$row_class = 'row justify-content-start';
+							$background_class = 'text-dark alert-light';
+						}
+						else
+						{
+							$from = $chat['user_name'];
+							$row_class = 'row justify-content-end';
+							$background_class = 'alert-success';
+						}
 
+						echo '
+						<div class="'.$row_class.'">
+							<div class="col-sm-10">
+								<div class="shadow-sm alert '.$background_class.'">
+									<b>'.$from.' - </b>'.$chat["msg"].'
+									<br />
+									<div class="text-right">
+										<small><i>'.$chat["created_on"].'</i></small>
+									</div>
+								</div>
+							</div>
+						</div>
+						';
+					}
+					?>
 					</div>
 				</div>
 
@@ -989,6 +1185,41 @@ session_start();
 				<?php
 				}
 				?>
+
+				<div class="card mt-3">
+					<div class="card-header">User List</div>
+					<div class="card-body" id="user_list">
+						<div class="list-group list-group-flush">
+						<?php
+						if(count($user_data) > 0)
+						{
+							foreach($user_data as $key => $user)
+							{
+								$icon = '<i class="fa fa-circle text-danger"></i>';
+
+								if($user['user_login_status'] == 'Login')
+								{
+									$icon = '<i class="fa fa-circle text-success"></i>';
+								}
+
+								if($user['user_id'] != $login_user_id)
+								{
+									echo '
+									<a class="list-group-item list-group-item-action">
+										<img src="'.$user["user_profile"].'" class="img-fluid rounded-circle img-thumbnail" width="50" />
+										<span class="ml-1"><strong>'.$user["user_name"].'</strong></span>
+										<span class="mt-2 float-right">'.$icon.'</span>
+									</a>
+									';
+								}
+
+							}
+						}
+						?>
+						</div>
+					</div>
+				</div>
+
 			</div>
 		</div>
 	</div>
@@ -1007,11 +1238,22 @@ session_start();
 
 		    var data = JSON.parse(e.data);
 
-		    var row_class = 'row justify-content-start';
+		    var row_class = '';
 
-		    var background_class = 'text-dark alert-light';
+		    var background_class = '';
 
-		    var html_data = "<div class='"+row_class+"'><div class='col-sm-10'><div class='shadow-sm alert "+background_class+"'>"+data.msg+"</div></div></div>";
+		    if(data.from == 'Me')
+		    {
+		    	row_class = 'row justify-content-start';
+		    	background_class = 'text-dark alert-light';
+		    }
+		    else
+		    {
+		    	row_class = 'row justify-content-end';
+		    	background_class = 'alert-success';
+		    }
+
+		    var html_data = "<div class='"+row_class+"'><div class='col-sm-10'><div class='shadow-sm alert "+background_class+"'><b>"+data.from+" - </b>"+data.msg+"<br /><div class='text-right'><small><i>"+data.dt+"</i></small></div></div></div></div>";
 
 		    $('#messages_area').append(html_data);
 
@@ -1019,6 +1261,8 @@ session_start();
 		};
 
 		$('#chat_form').parsley();
+
+		$('#messages_area').scrollTop($('#messages_area')[0].scrollHeight);
 
 		$('#chat_form').on('submit', function(event){
 
@@ -1038,11 +1282,14 @@ session_start();
 
 				conn.send(JSON.stringify(data));
 
+				$('#messages_area').scrollTop($('#messages_area')[0].scrollHeight);
+
 			}
 
 		});
 		
-		$('#logout').click(function() {
+		$('#logout').click(function(){
+
 			user_id = $('#login_user_id').val();
 
 			$.ajax({
@@ -1060,8 +1307,11 @@ session_start();
 					}
 				}
 			})
+
 		});
+
 	});
+	
 </script>
 </html>
 ```
@@ -1072,10 +1322,13 @@ Ce fichier a reçu une demande ajax pour la déconnexion de l'utilisateur de l'a
 
 ```
 <?php
+
 //action.php
+
 session_start();
 
-if(isset($_POST['action']) && $_POST['action'] == 'leave') {
+if(isset($_POST['action']) && $_POST['action'] == 'leave')
+{
 	require('database/ChatUser.php');
 
 	$user_object = new ChatUser;
@@ -1084,7 +1337,8 @@ if(isset($_POST['action']) && $_POST['action'] == 'leave') {
 
 	$user_object->setUserLoginStatus('Logout');
 
-	if($user_object->update_user_login_data()) {
+	if($user_object->update_user_login_data())
+	{
 		unset($_SESSION['user_data']);
 
 		session_destroy();
@@ -1092,6 +1346,8 @@ if(isset($_POST['action']) && $_POST['action'] == 'leave') {
 		echo json_encode(['status'=>1]);
 	}
 }
+
+
 ?>
 ```
 
@@ -1105,12 +1361,15 @@ if(isset($_POST['action']) && $_POST['action'] == 'leave') {
 namespace MyApp;
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
+require dirname(__DIR__) . "/database/ChatUser.php";
+require dirname(__DIR__) . "/database/ChatRooms.php";
 
 class Chat implements MessageComponentInterface {
     protected $clients;
 
     public function __construct() {
         $this->clients = new \SplObjectStorage;
+        echo 'Server Started';
     }
 
     public function onOpen(ConnectionInterface $conn) {
@@ -1126,11 +1385,45 @@ class Chat implements MessageComponentInterface {
         echo sprintf('Connection %d sending message "%s" to %d other connection%s' . "\n"
             , $from->resourceId, $msg, $numRecv, $numRecv == 1 ? '' : 's');
 
+        $data = json_decode($msg, true);
+
+        $chat_object = new \ChatRooms;
+
+        $chat_object->setUserId($data['userId']);
+
+        $chat_object->setMessage($data['msg']);
+
+        $chat_object->setCreatedOn(date("Y-m-d h:i:s"));
+
+        $chat_object->save_chat();
+
+        $user_object = new \ChatUser;
+
+        $user_object->setUserId($data['userId']);
+
+        $user_data = $user_object->get_user_data_by_id();
+
+        $user_name = $user_data['user_name'];
+
+        $data['dt'] = date("d-m-Y h:i:s");
+
+
         foreach ($this->clients as $client) {
-            if ($from !== $client) {
+            /*if ($from !== $client) {
                 // The sender is not the receiver, send to each client connected
                 $client->send($msg);
+            }*/
+
+            if($from == $client)
+            {
+                $data['from'] = 'Me';
             }
+            else
+            {
+                $data['from'] = $user_name;
+            }
+
+            $client->send(json_encode($data));
         }
     }
 
